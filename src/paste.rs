@@ -10,20 +10,18 @@ const KEY_LENGTH: u32 = 8;
 #[derive(Serialize, Deserialize)]
 pub struct Paste {
     pub id: i64,
-    pub title: String,
     pub content: Vec<(String, String)>,
     pub signature: String, 
     pub views: i64,
     pub timestamp: i64
 }
 impl Paste {
-    pub async fn create(db: &Pool<Postgres>, title: String, content: Vec<(String, String)>, signature: String) -> i64 {
+    pub async fn create(db: &Pool<Postgres>, content: Vec<(String, String)>, signature: String) -> i64 {
         // returns id on creation
         let id = Self::generate_id(db).await;
 
-        sqlx::query("insert into hastebin.paste(id, title, content, signature, views, timestamp) values($1, $2, $3, $4, $5, $6);")
+        sqlx::query("insert into hastebin.paste(id, content, signature, views, timestamp) values($1, $2, $3, $4, $5);")
             .bind(id)
-            .bind(title)
             .bind(serde_json::to_string(&content).unwrap())
             .bind(signature)
             .bind(0)
@@ -81,7 +79,6 @@ impl Paste {
 
 #[derive(Serialize, Deserialize)]
 pub struct PayloadPaste { // used by json
-    pub title: String,
     pub content: Vec<(String, String)>,
     pub signature: String
 }
@@ -89,7 +86,6 @@ pub struct PayloadPaste { // used by json
 #[derive(FromRow, Serialize, Deserialize)]
 pub struct RawPaste { // used by db
     pub id: i64,
-    pub title: String,
     pub content: String,
     pub signature: String,
     pub views: i64,
@@ -99,7 +95,6 @@ impl Into<Paste> for RawPaste {
     fn into(self) -> Paste {
         Paste {
             id: self.id,
-            title: self.title,
             content: serde_json::from_str(self.content.as_str()).unwrap(),
             signature: self.signature,
             views: self.views,
@@ -113,7 +108,7 @@ pub async fn create(
     State(app_state): State<AppState>,
     WithRejection(Json(payload), _): WithRejection<Json<PayloadPaste>, ExtractorError>
 ) -> impl IntoResponse {
-    Paste::create(&app_state.db, payload.title, payload.content, payload.signature).await.to_string().into_response()
+    Paste::create(&app_state.db, payload.content, payload.signature).await.to_string().into_response()
 }
 
 #[axum::debug_handler]
