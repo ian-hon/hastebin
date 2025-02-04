@@ -5,7 +5,7 @@ use sqlx::{prelude::FromRow, Pool, Postgres};
 
 use crate::{extractor_error::ExtractorError, utils::{self, async_rng_range_int_big, ValueInt}, AppState};
 
-const KEY_LENGTH: u32 = 8;
+const KEY_LENGTH: u32 = 4;
 
 #[derive(Serialize, Deserialize)]
 pub struct Paste {
@@ -41,8 +41,17 @@ impl Paste {
             .map(|x| x.0.clone())
             .collect::<Vec<i64>>();
 
-        loop { // hmmmm; possible infinite loop?
+        for _ in 0..(16i64.pow(KEY_LENGTH)) {
             let candidate = async_rng_range_int_big(0, 16i64.pow(KEY_LENGTH));
+            if ids.contains(&candidate) {
+                continue;
+            }
+    
+            return candidate;
+        }
+
+        loop {
+            let candidate = async_rng_range_int_big(0, 16i64.pow(KEY_LENGTH * 2));
             if ids.contains(&candidate) {
                 continue;
             }
