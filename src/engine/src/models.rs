@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::Deref};
+use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
@@ -52,15 +52,14 @@ pub struct Comment {
 
     pub to_row: i64,
     pub to_column: i64,
-    // pub from: (usize, usize),
-    // pub to: (usize, usize),
-    // pub from: (usize, Option<usize>),
-    // pub to: (usize, Option<usize>),
 }
 
 // similar to go's enum id system
 // https://go.dev/wiki/Iota
 pub trait Iota<I: Into<i64> + Copy> {
+    // https://blog.rust-lang.org/2023/12/28/Rust-1.75.0/#async-fn-and-return-position-impl-trait-in-traits
+    // https://blog.rust-lang.org/2023/12/21/async-fn-rpit-in-traits/#where-the-gaps-lie
+    #![allow(async_fn_in_trait)]
     async fn fetch_all_ids(pool: &Pool<Postgres>) -> Vec<I>;
     async fn generate_id(pool: &Pool<Postgres>) -> i64 {
         let mut highest = i64::MIN;

@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-mod config;
+pub mod config;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -11,15 +11,15 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let config = config::Config::from_env()?;
+    let config = config::from_env()?;
+
     // if the db was locally hosted, we would be doing migrations here
     let db_pool = engine::db::create_pool(&config.database_url).await?;
-
     let app_state = api::AppState::new(db_pool, config.clone());
 
     let app = Router::new()
         // https://www.reddit.com/r/node/comments/bol0fq/comment/enhhc3k
-        .merge(api::routes::create_routes())
+        .merge(api::router::create_routes())
         // https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html#method.new_for_http
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new()) // TODO: benchmark
