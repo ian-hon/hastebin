@@ -1,57 +1,42 @@
-use std::{env, net::SocketAddr};
+use axum::Router;
+use std::net::SocketAddr;
+use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use axum::{extract::{FromRef, State}, http::StatusCode, response::{IntoResponse, Response}, routing::{get, post}, Router};
-use dotenv::dotenv;
-use tower_http::cors::{Any, CorsLayer};
-use sqlx::{postgres::{PgPoolOptions, PgRow}, PgPool, Pool, Postgres, Row};
+mod config;
 
-mod utils;
-mod extractor_error;
-
-mod paste;
-
-pub async fn not_implemented_yet() -> Response {
-    (StatusCode::NOT_IMPLEMENTED, "not implemented yet chill".to_string()).into_response()
-}
-
-pub async fn testing(
-    State(app_state): State<AppState>
-) -> String {
-    format!("{:?}", 
-        sqlx::query("select * from hastebin.user;")
-            .fetch_all(&app_state.db)
-            .await.unwrap()
-    )
-}
-
-#[derive(Clone, FromRef)]
-pub struct AppState {
-    pub db: Pool<Postgres>
-}
+// mod api;
+// mod config;
+// mod db;
+// mod models;
+// mod services;
+// mod error;
 
 #[tokio::main]
-async fn main() {
-    dotenv().ok();
+async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let config = config::Config::from_env()?;
+    // if the db was locally hosted, we would be doing migrations here
+    let db_pool = engine::db::create_pool(&config.database_url).await?;
+
+    let app_state = api::AppState::new(db_pool, config.clone());
 
     let app = Router::new()
-        .route("/", get(|| async { "hastebin at your service" }))
+        .merge(api::routes::create_routes())
+        .layer(TraceLayer::new_for_http())
+        .layer(CompressionLayer::new())
+        .layer(CorsLayer::permissive())
+        .with_state(app_state);
 
-        .route("/fetch/:id", get(paste::fetch))
-        .route("/create", post(paste::create))
+    // host on localhost
+    let addr = SocketAddr::from(([127, 0, 0, 1], config.port));
+    tracing::info!("hastebin on address: {}", addr);
 
-        .layer(
-            CorsLayer::new()
-                .allow_methods(Any)
-                .allow_origin(Any)
-                .allow_headers(Any)
-        )
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
 
-        .with_state(
-            AppState {
-                db: PgPool::connect(env::var("PG_ADDRESS").unwrap().to_string().replace("[YOUR-PASSWORD]", env::var("PG_PASSWORD").unwrap().as_str()).to_string().as_str()).await.unwrap()
-            }
-        );
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8521").await.unwrap();
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
+    Ok(())
 }
