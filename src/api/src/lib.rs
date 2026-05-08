@@ -10,6 +10,7 @@ pub struct AppState<C: Clone> {
     // but differing providers have differing apis
     pub db: Pool<Postgres>,
     pub config: C,
+    // consider caching pastes and comments
 }
 
 impl<C: Clone> AppState<C> {

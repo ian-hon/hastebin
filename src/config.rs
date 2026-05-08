@@ -15,9 +15,7 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        println!("huh");
         dotenv().ok();
-        println!("huh");
 
         Ok(Self {
             database_url: env::var("DATABASE_URL")?,
