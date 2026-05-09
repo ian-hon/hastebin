@@ -22,6 +22,7 @@ pub struct Paste {
 
     pub title: Option<String>,
     pub author: Option<String>,
+    pub checksum_passphrase: Option<String>,
 
     pub views: i64,
 

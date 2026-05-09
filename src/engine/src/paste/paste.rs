@@ -12,6 +12,7 @@ impl Paste {
         content: String,
         title: Option<String>,
         author: Option<String>,
+        checksum_passphrase: Option<String>,
         views: i64,
         created_at: i64,
         expires_at: Option<i64>,
@@ -22,6 +23,7 @@ impl Paste {
             content,
             title,
             author,
+            checksum_passphrase,
             views,
             created_at,
             expires_at,
@@ -36,7 +38,7 @@ impl Paste {
             .await;
 
         // https://docs.rs/sqlx/latest/sqlx/fn.query_as.html#example-map-rows-using-tuples
-        let r = sqlx::query_as::<_, Paste>("SELECT * FROM hastebin.paste WHERE id = $1")
+        let r = sqlx::query_as::<_, Paste>("SELECT paste.id, paste.content, paste.title, paste.author, paste.views, paste.created_at, paste.expires_at, paste.forked_from FROM hastebin.paste WHERE id = $1")
             .bind(id)
             .fetch_optional(pool)
             .await;
@@ -48,6 +50,7 @@ impl Paste {
         content: String,
         title: Option<String>,
         author: Option<String>,
+        checksum_passphrase: Option<String>,
         mut expires_at: Option<i64>,
         forked_from: Option<i64>,
         pool: &Pool<Postgres>,
@@ -65,16 +68,17 @@ impl Paste {
             );
         }
 
-        let _ = sqlx::query("INSERT INTO hastebin.paste(id, content, title, author, views, created_at, expires_at, forked_from) VALUES($1, $2, $3, $4, $5, $6, $7, $8)")
+        let _ = sqlx::query("INSERT INTO hastebin.paste(id, content, title, author, checksum_passphrase, views, created_at, expires_at, forked_from) VALUES($1, $2, $3, $4, $5, $6, $7, $8)")
             .bind(id)
             .bind(content)
             .bind(title)
             .bind(author)
+            .bind(checksum_passphrase)
             .bind(0)
             // using Postgres' now() is good practice; but why not here?
             //
             // there were one or two cases in my past experience where Supabase's server
-            // returned times in different timezones; possibly due to regional nodes?
+            // returned times in different timezones; possibly due to regional nodes + maintenance periods?
             //
             // seems like a breaking issue on their side but ill play it safe and compute
             // time locally, since im running only a singular centralised instance

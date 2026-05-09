@@ -27,7 +27,7 @@ pub async fn fetch_comment(
     Path(id): Path<i64>,
 ) -> Result<Json<Comment>, StatusCode> {
     match Comment::fetch(id, &state.db).await {
-        Some(comment) => Ok(Json(comment)),
+        Some(comment) => Ok(Json(comment)), // uses serde_json
         None => Err(StatusCode::NOT_FOUND),
     }
 }
