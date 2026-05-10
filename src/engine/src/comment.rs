@@ -59,7 +59,14 @@ impl Comment {
         to_row: i64,
         to_column: i64,
         pool: &Pool<Postgres>,
-    ) -> i64 {
+    ) -> Option<i64> {
+        if !crate::models::Paste::fetch(paste_id, pool)
+            .await?
+            .comments_enabled
+        {
+            return None;
+        }
+
         let id = Self::generate_id(pool).await;
 
         let _ = sqlx::query("INSERT INTO hastebin.comment(paste_id, id, content, author, created_at, from_row, from_column, to_row, to_column) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)")
@@ -74,7 +81,7 @@ impl Comment {
             .bind(to_column)
             .execute(pool);
 
-        id
+        Some(id)
     }
 }
 
@@ -85,5 +92,16 @@ impl Iota<i64> for Comment {
             .await;
 
         r.unwrap_or_default()
+    }
+
+    async fn generate_id(pool: &Pool<Postgres>) -> i64 {
+        // let ids = Self::fetch_all_ids(&pool).await;
+        // // O(n), expensive?
+        // *ids.iter().max().unwrap_or(&0)
+        let candidate = sqlx::query_scalar::<_, i64>("SELECT MAX(id) FROM hastebin.comment")
+            .fetch_optional(pool)
+            .await;
+
+        candidate.ok().flatten().unwrap_or(0) + 1
     }
 }

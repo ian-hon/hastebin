@@ -44,7 +44,7 @@ pub async fn create_comment(
     State(state): State<crate::AppState>,
     Json(payload): Json<CreateCommentRequest>,
 ) -> Result<Json<CreateCommentResponse>, StatusCode> {
-    let id = Comment::create(
+    let Some(id) = Comment::create(
         payload.paste_id,
         payload.content,
         payload.author,
@@ -54,7 +54,10 @@ pub async fn create_comment(
         payload.to_column,
         &state.db,
     )
-    .await;
+    .await
+    else {
+        return Err(StatusCode::NOT_FOUND);
+    };
 
     Ok(Json(CreateCommentResponse { id }))
 }

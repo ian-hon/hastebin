@@ -1,9 +1,21 @@
+use std::collections::HashSet;
+
 use sqlx::{Pool, Postgres};
 
 use crate::{
     models::{Iota, Paste},
-    utils,
+    utils::{self, rng_i64},
 };
+
+// used for id generation
+// we want to prioritise the smallest ids
+//
+// ID_FLOOR is the smallest boundary
+// if the randomly generated id cannot fit inside
+// that boundary, increase the ceiling by ID_STEPS until ID_CEILING
+pub const PASTE_ID_FLOOR: u32 = 2; // 4: ffff
+pub const PASTE_ID_STEPS: u32 = 2; // 2: ff;  ID_FLOOR + ID_STEPS = ffffff
+pub const PASTE_ID_CEILING: u32 = 16; // i64's max
 
 impl Paste {
     #[allow(unused)]
@@ -14,6 +26,7 @@ impl Paste {
         author: Option<String>,
         checksum_passphrase: Option<String>,
         views: i64,
+        comments_enabled: bool,
         created_at: i64,
         expires_at: Option<i64>,
         forked_from: Option<i64>,
@@ -25,6 +38,7 @@ impl Paste {
             author,
             checksum_passphrase,
             views,
+            comments_enabled,
             created_at,
             expires_at,
             forked_from,
@@ -38,7 +52,7 @@ impl Paste {
             .await;
 
         // https://docs.rs/sqlx/latest/sqlx/fn.query_as.html#example-map-rows-using-tuples
-        let r = sqlx::query_as::<_, Paste>("SELECT paste.id, paste.content, paste.title, paste.author, paste.views, paste.created_at, paste.expires_at, paste.forked_from FROM hastebin.paste WHERE id = $1")
+        let r = sqlx::query_as::<_, Paste>("SELECT paste.id, paste.content, paste.title, paste.author, paste.views, paste.comments_enabled, paste.created_at, paste.expires_at, paste.forked_from FROM hastebin.paste WHERE id = $1")
             .bind(id)
             .fetch_optional(pool)
             .await;
@@ -51,6 +65,7 @@ impl Paste {
         title: Option<String>,
         author: Option<String>,
         checksum_passphrase: Option<String>,
+        comments_enabled: bool,
         mut expires_at: Option<i64>,
         forked_from: Option<i64>,
         pool: &Pool<Postgres>,
@@ -68,13 +83,14 @@ impl Paste {
             );
         }
 
-        let _ = sqlx::query("INSERT INTO hastebin.paste(id, content, title, author, checksum_passphrase, views, created_at, expires_at, forked_from) VALUES($1, $2, $3, $4, $5, $6, $7, $8)")
+        let _ = sqlx::query("INSERT INTO hastebin.paste(id, content, title, author, checksum_passphrase, views, comments_enabled, created_at, expires_at, forked_from) VALUES($1, $2, $3, $4, $5, $6, $7, $8)")
             .bind(id)
             .bind(content)
             .bind(title)
             .bind(author)
             .bind(checksum_passphrase)
             .bind(0)
+            .bind(comments_enabled)
             // using Postgres' now() is good practice; but why not here?
             //
             // there were one or two cases in my past experience where Supabase's server
@@ -99,5 +115,41 @@ impl Iota<i64> for Paste {
             .await;
 
         r.unwrap_or_default()
+    }
+
+    async fn generate_id(pool: &Pool<Postgres>) -> i64 {
+        let mut highest = i64::MIN;
+
+        let ids: HashSet<i64> = Self::fetch_all_ids(pool)
+            .await
+            .iter()
+            .map(|&x| {
+                let x: i64 = x.into();
+                highest = highest.max(x);
+
+                return x;
+            })
+            .collect();
+
+        // start with 0-ff, (0-f^2)
+        // 0-ffff, (0-f^4)
+        // 0-ffffff, (0-f^6)
+        // 0-ffffffff, (0-f^8)
+        // until we hit the ceiling
+        for level in 0..PASTE_ID_CEILING {
+            let floor = 16_i64.pow(level * PASTE_ID_STEPS);
+            let ceiling = 16_i64.pow((level + 1) * PASTE_ID_STEPS);
+            for _ in floor..ceiling {
+                let candidate = rng_i64(floor, ceiling);
+
+                if !ids.contains(&candidate) {
+                    return candidate;
+                }
+            }
+        }
+
+        // if this panics, hastebin is either really
+        // popular or im bad at this
+        highest + 1
     }
 }
