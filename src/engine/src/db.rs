@@ -10,11 +10,3 @@ pub async fn create_pool(database_url: &str) -> anyhow::Result<PgPool> {
 
     Ok(pool)
 }
-
-#[warn(dead_code)]
-pub async fn run_migrations(pool: &PgPool) -> anyhow::Result<()> {
-    // stolen lol
-    // we dont use migrations so consider removing
-    sqlx::migrate!("./migrations").run(pool).await?;
-    Ok(())
-}

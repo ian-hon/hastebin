@@ -46,18 +46,23 @@ impl Paste {
     }
 
     pub async fn fetch(id: i64, pool: &Pool<Postgres>) -> Option<Paste> {
-        let _ = sqlx::query("UPDATE hastebin.paste SET view = view + 1 WHERE id = $1")
+        let _ = sqlx::query("UPDATE paste SET views = views + 1 WHERE id = $1")
             .bind(id)
             .execute(pool)
             .await;
 
         // https://docs.rs/sqlx/latest/sqlx/fn.query_as.html#example-map-rows-using-tuples
-        let r = sqlx::query_as::<_, Paste>("SELECT paste.id, paste.content, paste.title, paste.author, paste.views, paste.comments_enabled, paste.created_at, paste.expires_at, paste.forked_from FROM hastebin.paste WHERE id = $1")
+        // paste.checksum_passphrase,
+        // paste.views, paste.comments_enabled, paste.created_at, paste.expires_at, paste.forked_from
+        let r = sqlx::query_as::<_, Paste>("SELECT * FROM paste WHERE id = $1")
             .bind(id)
             .fetch_optional(pool)
             .await;
 
-        r.ok().flatten()
+        r.ok().flatten().map(|mut p| {
+            p.checksum_passphrase = None;
+            return p;
+        })
     }
 
     pub async fn create(
@@ -83,7 +88,7 @@ impl Paste {
             );
         }
 
-        let _ = sqlx::query("INSERT INTO hastebin.paste(id, content, title, author, checksum_passphrase, views, comments_enabled, created_at, expires_at, forked_from) VALUES($1, $2, $3, $4, $5, $6, $7, $8)")
+        let e = sqlx::query("INSERT INTO paste(id, content, title, author, checksum_passphrase, views, comments_enabled, created_at, expires_at, forked_from) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
             .bind(id)
             .bind(content)
             .bind(title)
@@ -101,7 +106,9 @@ impl Paste {
             .bind(utils::get_time())
             .bind(expires_at)
             .bind(forked_from)
-            .execute(pool);
+            .execute(pool).await.unwrap();
+
+        println!("{e:?}");
 
         id
     }
@@ -110,7 +117,7 @@ impl Iota<i64> for Paste {
     async fn fetch_all_ids(pool: &Pool<Postgres>) -> Vec<i64> {
         // https://docs.rs/sqlx/latest/sqlx/fn.query_scalar.html
         // https://docs.rs/sqlx/latest/sqlx/query/struct.QueryAs.html#method.fetch_all
-        let r = sqlx::query_scalar::<_, i64>("SELECT id FROM hastebin.paste")
+        let r = sqlx::query_scalar::<_, i64>("SELECT id FROM paste")
             .fetch_all(pool)
             .await;
 

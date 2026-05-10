@@ -33,7 +33,7 @@ impl Comment {
 
     // TODO: encrypt this as well
     pub async fn fetch(id: i64, pool: &Pool<Postgres>) -> Option<Comment> {
-        let r = sqlx::query_as::<_, Comment>("SELECT * FROM hastebin.comment WHERE id = $2")
+        let r = sqlx::query_as::<_, Comment>("SELECT * FROM comment WHERE id = $2")
             .bind(id)
             .fetch_optional(pool)
             .await;
@@ -42,7 +42,7 @@ impl Comment {
     }
 
     pub async fn fetch_from_paste(paste_id: i64, pool: &Pool<Postgres>) -> Vec<Comment> {
-        let r = sqlx::query_as::<_, Comment>("SELECT * FROM hastebin.comment WHERE paste_id = $1")
+        let r = sqlx::query_as::<_, Comment>("SELECT * FROM comment WHERE paste_id = $1")
             .bind(paste_id)
             .fetch_all(pool)
             .await;
@@ -69,7 +69,7 @@ impl Comment {
 
         let id = Self::generate_id(pool).await;
 
-        let _ = sqlx::query("INSERT INTO hastebin.comment(paste_id, id, content, author, created_at, from_row, from_column, to_row, to_column) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+        let _ = sqlx::query("INSERT INTO comment(paste_id, id, content, author, created_at, from_row, from_column, to_row, to_column) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)")
             .bind(paste_id)
             .bind(id)
             .bind(content)
@@ -87,7 +87,7 @@ impl Comment {
 
 impl Iota<i64> for Comment {
     async fn fetch_all_ids(pool: &Pool<Postgres>) -> Vec<i64> {
-        let r = sqlx::query_scalar::<_, i64>("SELECT id FROM hastebin.comment")
+        let r = sqlx::query_scalar::<_, i64>("SELECT id FROM comment")
             .fetch_all(pool)
             .await;
 
@@ -98,7 +98,7 @@ impl Iota<i64> for Comment {
         // let ids = Self::fetch_all_ids(&pool).await;
         // // O(n), expensive?
         // *ids.iter().max().unwrap_or(&0)
-        let candidate = sqlx::query_scalar::<_, i64>("SELECT MAX(id) FROM hastebin.comment")
+        let candidate = sqlx::query_scalar::<_, i64>("SELECT MAX(id) FROM comment")
             .fetch_optional(pool)
             .await;
 
