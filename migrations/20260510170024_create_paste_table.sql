@@ -1,5 +1,5 @@
 -- Add migration script here
-CREATE TABLE paste (
+CREATE TABLE IF NOT EXISTS paste (
     id BIGSERIAL PRIMARY KEY,
     content TEXT NOT NULL,
     title TEXT,
@@ -12,6 +12,6 @@ CREATE TABLE paste (
     forked_from BIGINT REFERENCES paste(id) ON DELETE SET NULL
 );
 
-CREATE INDEX idx_paste_created_at ON paste(created_at);
-CREATE INDEX idx_paste_expires_at ON paste(expires_at) WHERE expires_at IS NOT NULL;
-CREATE INDEX idx_paste_forked_from ON paste(forked_from) WHERE forked_from IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_paste_created_at ON paste(created_at);
+CREATE INDEX IF NOT EXISTS idx_paste_expires_at ON paste(expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_paste_forked_from ON paste(forked_from) WHERE forked_from IS NOT NULL;

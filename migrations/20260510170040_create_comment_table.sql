@@ -1,5 +1,5 @@
 -- Add migration script here
-CREATE TABLE comment (
+CREATE TABLE IF NOT EXISTS comment (
     id BIGSERIAL PRIMARY KEY,
     paste_id BIGINT NOT NULL REFERENCES paste(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
@@ -14,6 +14,6 @@ CREATE TABLE comment (
     )
 );
 
-CREATE INDEX idx_comment_paste_id ON comment(paste_id);
-CREATE INDEX idx_comment_created_at ON comment(created_at);
-CREATE INDEX idx_comment_paste_created ON comment(paste_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_comment_paste_id ON comment(paste_id);
+CREATE INDEX IF NOT EXISTS idx_comment_created_at ON comment(created_at);
+CREATE INDEX IF NOT EXISTS idx_comment_paste_created ON comment(paste_id, created_at);

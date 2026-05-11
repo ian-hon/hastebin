@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
     let config = config::from_env()?;
 
     let db_pool = engine::db::create_pool(&config.database_url).await?;
-    // sqlx::migrate!("./migrations").run(&db_pool).await?;
+    sqlx::migrate!("./migrations").run(&db_pool).await?;
 
     let app_state = api::AppState::new(db_pool, config.clone());
 

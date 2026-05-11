@@ -1,3 +1,4 @@
+pub mod compression;
 pub mod utils;
 
 pub mod db;

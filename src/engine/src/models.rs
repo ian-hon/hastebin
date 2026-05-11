@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+// we dont derive the FromRow trait here, because we want custom compression and decompression from the db
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Paste {
     pub id: i64,
     pub content: String,

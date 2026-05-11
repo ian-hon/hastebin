@@ -1,8 +1,9 @@
 use std::collections::HashSet;
 
-use sqlx::{Pool, Postgres};
+use sqlx::{Pool, Postgres, Row};
 
 use crate::{
+    compression,
     models::{Iota, Paste},
     utils::{self, rng_i64},
 };
@@ -46,20 +47,36 @@ impl Paste {
     }
 
     pub async fn fetch(id: i64, pool: &Pool<Postgres>) -> Option<Paste> {
+        // https://docs.rs/sqlx/latest/sqlx/fn.query_as.html#example-map-rows-using-tuples
         let _ = sqlx::query("UPDATE paste SET views = views + 1 WHERE id = $1")
             .bind(id)
             .execute(pool)
             .await;
+        
 
-        // https://docs.rs/sqlx/latest/sqlx/fn.query_as.html#example-map-rows-using-tuples
-        // paste.checksum_passphrase,
-        // paste.views, paste.comments_enabled, paste.created_at, paste.expires_at, paste.forked_from
-        let r = sqlx::query_as::<_, Paste>("SELECT * FROM paste WHERE id = $1")
+        let row = sqlx::query("SELECT * FROM paste WHERE id = $1")
             .bind(id)
             .fetch_optional(pool)
-            .await;
+            .await
+            .ok()
+            .flatten()?;
 
-        r.ok().flatten()
+        let compressed_content: Vec<u8> = row.get("content");
+        let content = compression::decompress(&compressed_content).ok()?;
+
+        // here is the compression/decompression
+        Some(Paste {
+            id: row.get("id"),
+            content,
+            title: row.get("title"),
+            author: row.get("author"),
+            checksum_passphrase: row.get("checksum_passphrase"),
+            views: row.get("views"),
+            comments_enabled: row.get("comments_enabled"),
+            created_at: row.get("created_at"),
+            expires_at: row.get("expires_at"),
+            forked_from: row.get("forked_from"),
+        })
     }
 
     pub async fn create(
@@ -85,9 +102,15 @@ impl Paste {
             );
         }
 
+        // compress before storing
+        let compressed_content = match compression::compress_fast(&content) {
+            Ok(compressed) => compressed,
+            Err(_) => return None,
+        };
+
         if let Ok(_) = sqlx::query("INSERT INTO paste(id, content, title, author, checksum_passphrase, views, comments_enabled, created_at, expires_at, forked_from) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
             .bind(id)
-            .bind(content)
+            .bind(compressed_content)
             .bind(title)
             .bind(author)
             .bind(checksum_passphrase.map(|c| utils::construct_digest(c)))
