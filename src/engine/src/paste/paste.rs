@@ -59,10 +59,7 @@ impl Paste {
             .fetch_optional(pool)
             .await;
 
-        r.ok().flatten().map(|mut p| {
-            p.checksum_passphrase = None;
-            return p;
-        })
+        r.ok().flatten()
     }
 
     pub async fn create(
@@ -77,7 +74,7 @@ impl Paste {
 
         soft_limit: usize,
         default_expiry_days: u32,
-    ) -> i64 {
+    ) -> Option<i64> {
         let id = Self::generate_id(pool).await;
 
         // if the content size is too big, we impose the minimum expiry
@@ -88,12 +85,12 @@ impl Paste {
             );
         }
 
-        let e = sqlx::query("INSERT INTO paste(id, content, title, author, checksum_passphrase, views, comments_enabled, created_at, expires_at, forked_from) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
+        if let Ok(_) = sqlx::query("INSERT INTO paste(id, content, title, author, checksum_passphrase, views, comments_enabled, created_at, expires_at, forked_from) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
             .bind(id)
             .bind(content)
             .bind(title)
             .bind(author)
-            .bind(checksum_passphrase)
+            .bind(checksum_passphrase.map(|c| utils::construct_digest(c)))
             .bind(0)
             .bind(comments_enabled)
             // using Postgres' now() is good practice; but why not here?
@@ -106,11 +103,11 @@ impl Paste {
             .bind(utils::get_time())
             .bind(expires_at)
             .bind(forked_from)
-            .execute(pool).await.unwrap();
-
-        println!("{e:?}");
-
-        id
+            .execute(pool).await {
+                Some(id)
+            } else {
+                None
+            }
     }
 }
 impl Iota<i64> for Paste {

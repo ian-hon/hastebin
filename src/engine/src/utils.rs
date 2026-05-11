@@ -17,7 +17,11 @@ pub fn rng() -> f64 {
     rand::random::<f64>()
 }
 
-pub fn construct_digest(data: impl AsRef<[u8]>) -> [u8; 32] {
+pub fn construct_digest(data: impl AsRef<[u8]>) -> String {
     // SAFE: returned hash will always be able to be transformed into a [u8; 32]
-    Sha256::digest(data).as_slice().try_into().unwrap()
+    let buf: [u8; 32] = Sha256::digest(data).as_slice().try_into().unwrap();
+
+    buf.iter()
+        .map(|byte| format!("{:02x}", byte))
+        .collect::<String>()
 }

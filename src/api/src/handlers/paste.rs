@@ -6,6 +6,12 @@ use axum::{
 use engine::models::Paste;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Serialize)]
+pub struct FetchPasteResponse {
+    pub paste: Paste,
+    pub checksum_pair: Option<(String, String)>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreatePasteRequest {
     pub content: String,
@@ -25,9 +31,15 @@ pub struct CreatePasteResponse {
 pub async fn fetch_paste(
     State(state): State<crate::AppState>,
     Path(id): Path<i64>,
-) -> Result<Json<Paste>, StatusCode> {
+) -> Result<Json<FetchPasteResponse>, StatusCode> {
     match Paste::fetch(id, &state.db).await {
-        Some(paste) => Ok(Json(paste)),
+        Some(mut paste) => Ok(Json(FetchPasteResponse {
+            checksum_pair: paste.construct_checksum_pair(),
+            paste: {
+                paste.checksum_passphrase = None;
+                paste
+            },
+        })),
         None => Err(StatusCode::NOT_FOUND),
     }
 }
@@ -43,7 +55,7 @@ pub async fn create_paste(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    let id = Paste::create(
+    if let Some(id) = Paste::create(
         payload.content,
         payload.title,
         payload.author,
@@ -55,7 +67,10 @@ pub async fn create_paste(
         state.config.size_soft_limit,
         state.config.default_expiry_days,
     )
-    .await;
+    .await
+    {
+        return Ok(Json(CreatePasteResponse { id }));
+    }
 
-    Ok(Json(CreatePasteResponse { id }))
+    Err(StatusCode::INTERNAL_SERVER_ERROR)
 }
