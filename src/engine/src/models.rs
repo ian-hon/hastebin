@@ -34,6 +34,9 @@ pub struct Comment {
 
     pub created_at: i64,
 
+    // page index for multi-page pastes
+    pub page_index: i64,
+
     // row, column (y, x)
     // treat as unsigned ints
     pub from_row: i64,

@@ -13,6 +13,7 @@ impl Comment {
         content: String,
         author: Option<String>,
         created_at: i64,
+        page_index: i64,
         from_row: i64,
         from_column: i64,
         to_row: i64,
@@ -24,6 +25,7 @@ impl Comment {
             content,
             author,
             created_at,
+            page_index,
             from_row,
             from_column,
             to_row,
@@ -54,6 +56,7 @@ impl Comment {
         paste_id: i64,
         content: String,
         author: Option<String>,
+        page_index: i64,
         from_row: i64,
         from_column: i64,
         to_row: i64,
@@ -69,17 +72,18 @@ impl Comment {
 
         let id = Self::generate_id(pool).await;
 
-        let _ = sqlx::query("INSERT INTO comment(paste_id, id, content, author, created_at, from_row, from_column, to_row, to_column) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+        let _ = sqlx::query("INSERT INTO comment(paste_id, id, content, author, created_at, page_index, from_row, from_column, to_row, to_column) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
             .bind(paste_id)
             .bind(id)
             .bind(content)
             .bind(author)
             .bind(utils::get_time()) // see paste.rs on why not postgres' now()
+            .bind(page_index)
             .bind(from_row)
             .bind(from_column)
             .bind(to_row)
             .bind(to_column)
-            .execute(pool);
+            .execute(pool).await;
 
         Some(id)
     }
