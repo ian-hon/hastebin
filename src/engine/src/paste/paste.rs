@@ -52,7 +52,6 @@ impl Paste {
             .bind(id)
             .execute(pool)
             .await;
-        
 
         let row = sqlx::query("SELECT * FROM paste WHERE id = $1")
             .bind(id)
