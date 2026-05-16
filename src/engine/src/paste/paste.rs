@@ -47,12 +47,18 @@ impl Paste {
     }
 
     pub async fn fetch(id: i64, pool: &Pool<Postgres>) -> Option<Paste> {
-        // https://docs.rs/sqlx/latest/sqlx/fn.query_as.html#example-map-rows-using-tuples
+        // for user use
         let _ = sqlx::query("UPDATE paste SET views = views + 1 WHERE id = $1")
             .bind(id)
             .execute(pool)
             .await;
 
+        Self::fetch_internal(id, pool).await
+    }
+
+    pub async fn fetch_internal(id: i64, pool: &Pool<Postgres>) -> Option<Paste> {
+        // for internal use (doesnt increment view counter)
+        // https://docs.rs/sqlx/latest/sqlx/fn.query_as.html#example-map-rows-using-tuples
         let row = sqlx::query("SELECT * FROM paste WHERE id = $1")
             .bind(id)
             .fetch_optional(pool)

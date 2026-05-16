@@ -48,9 +48,9 @@ pub async fn create_paste(
     State(state): State<crate::AppState>,
     Json(payload): Json<CreatePasteRequest>,
 ) -> Result<Json<CreatePasteResponse>, StatusCode> {
-    // we check if the parent exists first
+    // we check if the parent exists first (use fetch_internal to avoid increasing views)
     if let Some(p) = payload.forked_from
-        && let None = Paste::fetch(p, &state.db).await
+        && let None = Paste::fetch_internal(p, &state.db).await
     {
         return Err(StatusCode::NOT_FOUND);
     }

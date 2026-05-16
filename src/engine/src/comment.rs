@@ -63,7 +63,7 @@ impl Comment {
         to_column: i64,
         pool: &Pool<Postgres>,
     ) -> Option<i64> {
-        if !crate::models::Paste::fetch(paste_id, pool)
+        if !crate::models::Paste::fetch_internal(paste_id, pool)
             .await?
             .comments_enabled
         {
