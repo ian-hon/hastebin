@@ -137,6 +137,14 @@ impl Paste {
                 None
             }
     }
+
+    pub async fn delete(id: i64, pool: &Pool<Postgres>) -> bool {
+        sqlx::query("DELETE FROM paste WHERE id = $1")
+            .bind(id)
+            .execute(pool)
+            .await
+            .is_ok()
+    }
 }
 impl Iota<i64> for Paste {
     async fn fetch_all_ids(pool: &Pool<Postgres>) -> Vec<i64> {

@@ -33,13 +33,25 @@ pub async fn fetch_paste(
     Path(id): Path<i64>,
 ) -> Result<Json<FetchPasteResponse>, StatusCode> {
     match Paste::fetch(id, &state.db).await {
-        Some(mut paste) => Ok(Json(FetchPasteResponse {
-            checksum_pair: paste.construct_checksum_pair(),
-            paste: {
-                paste.checksum_passphrase = None;
-                paste
-            },
-        })),
+        Some(mut paste) => {
+            if let Some(expires_at) = paste.expires_at {
+                let current_time = engine::utils::get_time();
+                println!("{current_time}, {expires_at}");
+                if current_time > expires_at {
+                    // delete it
+                    Paste::delete(id, &state.db).await;
+                    return Err(StatusCode::NOT_FOUND);
+                }
+            }
+
+            Ok(Json(FetchPasteResponse {
+                checksum_pair: paste.construct_checksum_pair(),
+                paste: {
+                    paste.checksum_passphrase = None;
+                    paste
+                },
+            }))
+        }
         None => Err(StatusCode::NOT_FOUND),
     }
 }
