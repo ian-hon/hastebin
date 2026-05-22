@@ -4,6 +4,7 @@ use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLay
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 pub mod config;
+pub mod tasks;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -15,6 +16,7 @@ async fn main() -> anyhow::Result<()> {
 
     let db_pool = engine::db::create_pool(&config.database_url).await?;
     sqlx::migrate!("./migrations").run(&db_pool).await?;
+    tasks::spawn_all_tasks(db_pool.clone(), config.clone());
 
     let app_state = api::AppState::new(db_pool, config.clone());
 

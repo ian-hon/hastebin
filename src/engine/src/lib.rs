@@ -6,3 +6,4 @@ pub mod models;
 
 pub mod comment;
 pub mod paste;
+pub mod cleanup;

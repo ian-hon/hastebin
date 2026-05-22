@@ -13,6 +13,9 @@ pub struct Config {
     // the expiry applies only to pastes over the limit
     pub size_soft_limit: usize, // in bytes
     pub default_expiry_days: u32,
+
+    // how often to delete expired pastes, in seconds
+    pub cleanup_interval: u64,
 }
 
 #[derive(Clone)]

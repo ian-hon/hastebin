@@ -17,5 +17,8 @@ pub fn from_env() -> anyhow::Result<Config> {
         default_expiry_days: env::var("DEFAULT_EXPIRY_DAYS")
             .unwrap_or_else(|_| "7".to_string())
             .parse()?,
+        cleanup_interval: env::var("CLEANUP_INTERVAL")
+            .unwrap_or_else(|_| "86400".to_string())
+            .parse()?,
     })
 }
