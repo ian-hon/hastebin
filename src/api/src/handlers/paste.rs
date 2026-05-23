@@ -32,11 +32,34 @@ pub async fn fetch_paste(
     State(state): State<crate::AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<FetchPasteResponse>, StatusCode> {
+    // check cache
+    if let Some(mut paste) = state.cache.get(id) {
+        if let Some(expires_at) = paste.expires_at
+            && engine::utils::get_time() > expires_at
+        {
+            // remove, then proceed with regular fetching
+            println!("cached paste expired");
+            state.cache.remove(id);
+        } else {
+            println!("returning from cache");
+            return Ok(Json(FetchPasteResponse {
+                checksum_pair: paste.construct_checksum_pair(),
+                paste: {
+                    paste.checksum_passphrase = None;
+                    paste
+                },
+            }));
+        }
+    }
+
+    // cache miss
+    // this section runs if the cached paste is expired too
+    println!("cache miss. fetching from db");
     match Paste::fetch(id, &state.db).await {
         Some(mut paste) => {
             if let Some(expires_at) = paste.expires_at {
                 let current_time = engine::utils::get_time();
-                println!("{current_time}, {expires_at}");
+                // println!("{current_time}, {expires_at}");
                 if current_time > expires_at {
                     // delete it
                     Paste::delete(id, &state.db).await;
@@ -44,6 +67,7 @@ pub async fn fetch_paste(
                 }
             }
 
+            state.cache.insert(id, paste.clone());
             Ok(Json(FetchPasteResponse {
                 checksum_pair: paste.construct_checksum_pair(),
                 paste: {

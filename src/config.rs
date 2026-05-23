@@ -20,5 +20,8 @@ pub fn from_env() -> anyhow::Result<Config> {
         cleanup_interval: env::var("CLEANUP_INTERVAL")
             .unwrap_or_else(|_| "86400".to_string())
             .parse()?,
+        cache_size: env::var("CACHE_SIZE")
+            .unwrap_or_else(|_| "100".to_string())
+            .parse()?,
     })
 }

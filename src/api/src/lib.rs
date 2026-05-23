@@ -1,9 +1,12 @@
 use serde::Deserialize;
 use sqlx::{Pool, Postgres};
 
+mod cache;
 mod handlers;
 pub mod router;
 mod routes;
+
+pub use cache::PasteCache;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
@@ -16,6 +19,9 @@ pub struct Config {
 
     // how often to delete expired pastes, in seconds
     pub cleanup_interval: u64,
+
+    // number of pastes to cache in memory
+    pub cache_size: usize,
 }
 
 #[derive(Clone)]
@@ -24,11 +30,12 @@ pub struct AppState {
     // but differing providers have differing apis
     pub db: Pool<Postgres>,
     pub config: Config,
-    // consider caching pastes and comments
+    pub cache: PasteCache,
 }
 
 impl AppState {
     pub fn new(db: Pool<Postgres>, config: Config) -> Self {
-        Self { db, config }
+        let cache = PasteCache::new(config.cache_size);
+        Self { db, config, cache }
     }
 }
