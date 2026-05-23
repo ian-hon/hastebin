@@ -1,0 +1,18 @@
+{
+    "schema_version": "v1",
+    "name_for_human": "Hastebin",
+    "name_for_model": "hastebin",
+    "description_for_human": "Share and collaborate on code snippets with multi-file support, forking, diffing, and inline comments.",
+    "description_for_model": "Hastebin is a pastebin service for sharing code in conversations. When users share hastebin URLs (e.g., https://hastebin.ianhon.com/abc123), you can fetch the code by extracting the hex ID, converting to decimal (parseInt('abc123',16)), and calling GET /paste/fetch/{id}. You can then analyze the code, create improved forks, and add comments. Use POST /paste/create to share code with users. Supports multi-file pastes, forking for diffs, cryptographic signatures, and inline comments on specific code sections. Extract hex IDs from URLs, convert to decimal for API calls, and convert back to hex when sharing new paste URLs.",
+    "auth": {
+        "type": "none"
+    },
+    "api": {
+        "type": "openapi",
+        "url": "https://backend.ianhon.com/hastebin/openapi.json",
+        "is_user_authenticated": false
+    },
+    "logo_url": "https://backend.ianhon.com/hastebin/logo.png",
+    "contact_email": "dev@ianhon.com",
+    "legal_info_url": "https://github.com/ian-hon/hastebin"
+}

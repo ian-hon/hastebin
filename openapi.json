@@ -1,0 +1,580 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Hastebin API",
+        "description": "A modern pastebin service for sharing code snippets. AI assistants can interact with pastes users share: fetch content from URLs, create new pastes, fork existing ones, and add comments. The API supports multi-file pastes, forking, diffing, commenting, and cryptographic signatures. Built with Axum and PostgreSQL.\n\n**For AI Assistants**: When a user shares a hastebin URL (e.g., https://hastebin.ianhon.com/abc123), extract the hex ID (abc123), convert it to decimal, and use GET /paste/fetch/{id} to retrieve the content. You can then answer questions about the code, create forks with improvements, or add helpful comments.",
+        "version": "1.0.0",
+        "contact": {
+            "name": "Ian Hon",
+            "email": "dev@ianhon.com",
+            "url": "https://ianhon.com"
+        },
+        "license": {
+            "name": "MIT"
+        }
+    },
+    "servers": [
+        {
+            "url": "https://backend.ianhon.com/hastebin",
+            "description": "Production server"
+        }
+    ],
+    "paths": {
+        "/health": {
+            "get": {
+                "summary": "Health check",
+                "description": "Returns a simple health status message to verify the API is running",
+                "operationId": "healthCheck",
+                "tags": [
+                    "System"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "API is healthy",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string",
+                                    "example": "hastebin at your service"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/paste/fetch/{id}": {
+            "get": {
+                "summary": "Fetch a paste by ID",
+                "description": "Retrieves a paste and its metadata. **AI Usage**: When a user shares a hastebin URL like https://hastebin.ianhon.com/abc123, extract 'abc123', convert it from hex to decimal (parseInt('abc123', 16)), and call this endpoint with the decimal ID. Returns the paste content, which can be analyzed, discussed, or used as a basis for forking. Increments view count. Returns checksum pair if the paste was signed. Automatically deletes expired pastes.",
+                "operationId": "fetchPaste",
+                "tags": [
+                    "Pastes"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "description": "The unique ID of the paste (decimal integer, though URLs typically use hex representation)",
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "example": 1234
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paste found and returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FetchPasteResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Paste not found or expired"
+                    }
+                }
+            }
+        },
+        "/paste/create": {
+            "post": {
+                "summary": "Create a new paste",
+                "description": "Creates a new paste with optional metadata. **AI Usage**: Use this to share code with users, create improved versions of pastes (set forked_from), or save code snippets for later. After creating, convert the returned decimal ID to hex for sharing: hex(id). Enable comments if you want users to provide feedback. Can fork existing pastes, enable comments, set expiration, and add cryptographic signatures.",
+                "operationId": "createPaste",
+                "tags": [
+                    "Pastes"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreatePasteRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Paste created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreatePasteResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Parent paste not found (when forking)"
+                    },
+                    "500": {
+                        "description": "Failed to create paste"
+                    }
+                }
+            }
+        },
+        "/comment/fetch/{id}": {
+            "get": {
+                "summary": "Fetch a comment by ID",
+                "description": "Retrieves a single comment by its ID",
+                "operationId": "fetchComment",
+                "tags": [
+                    "Comments"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "description": "The unique ID of the comment",
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "example": 42
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Comment found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Comment"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Comment not found"
+                    }
+                }
+            }
+        },
+        "/comment/paste/{paste_id}": {
+            "get": {
+                "summary": "Fetch all comments for a paste",
+                "description": "Retrieves all comments associated with a specific paste. **AI Usage**: After fetching a paste, check for comments to see existing discussion. Comments include line/column ranges showing which code sections they reference.",
+                "operationId": "fetchCommentsByPaste",
+                "tags": [
+                    "Comments"
+                ],
+                "parameters": [
+                    {
+                        "name": "paste_id",
+                        "in": "path",
+                        "required": true,
+                        "description": "The ID of the paste to fetch comments for",
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "example": 1234
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of comments (empty array if none exist)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Comment"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/comment/create": {
+            "post": {
+                "summary": "Create a comment on a paste",
+                "description": "Creates a comment on a specific text selection within a paste. **AI Usage**: Add helpful comments to code sections - suggest improvements, explain complex logic, or point out potential issues. Specify the exact lines (from_row/to_row) you're commenting on. Only works if comments are enabled for the paste.",
+                "operationId": "createComment",
+                "tags": [
+                    "Comments"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateCommentRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Comment created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateCommentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Paste not found or comments not enabled"
+                    }
+                }
+            }
+        },
+        "/openapi.json": {
+            "get": {
+                "summary": "Get OpenAPI specification",
+                "description": "Returns this OpenAPI specification in JSON format",
+                "operationId": "getOpenAPISpec",
+                "tags": [
+                    "System"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OpenAPI specification",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Paste": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "content",
+                    "views",
+                    "comments_enabled",
+                    "created_at"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Unique identifier for the paste",
+                        "example": 1234
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The actual content of the paste. Can be multi-file with JSON structure or plain text.",
+                        "example": "console.log('Hello, World!');"
+                    },
+                    "title": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Optional title for the paste",
+                        "example": "My Code Snippet"
+                    },
+                    "author": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Optional author name",
+                        "example": "john_doe"
+                    },
+                    "views": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Number of times this paste has been viewed",
+                        "example": 42
+                    },
+                    "comments_enabled": {
+                        "type": "boolean",
+                        "description": "Whether comments are enabled for this paste",
+                        "example": true
+                    },
+                    "created_at": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Creation timestamp in Unix epoch seconds",
+                        "example": 1716835200
+                    },
+                    "expires_at": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true,
+                        "description": "Expiration timestamp in Unix epoch seconds. Null means never expires.",
+                        "example": 1716921600
+                    },
+                    "forked_from": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true,
+                        "description": "ID of the parent paste if this is a fork",
+                        "example": 1000
+                    }
+                }
+            },
+            "FetchPasteResponse": {
+                "type": "object",
+                "required": [
+                    "paste"
+                ],
+                "properties": {
+                    "paste": {
+                        "$ref": "#/components/schemas/Paste"
+                    },
+                    "checksum_pair": {
+                        "type": "array",
+                        "nullable": true,
+                        "description": "Cryptographic signature pair [partial, full] - two SHA256 checksums if paste was signed. Users can verify ownership by checking sha256(passphrase + partial) = full. The passphrase is never stored.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2,
+                        "example": [
+                            "a1b2c3d4",
+                            "e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6"
+                        ]
+                    }
+                }
+            },
+            "CreatePasteRequest": {
+                "type": "object",
+                "required": [
+                    "content",
+                    "comments_enabled"
+                ],
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "The paste content. For multi-file pastes, use JSON array format: [{\"fileName\": \"file1.js\", \"content\": \"...\"}]",
+                        "example": "console.log('Hello, World!');"
+                    },
+                    "title": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Optional title",
+                        "example": "My Snippet"
+                    },
+                    "author": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Optional author name",
+                        "example": "john_doe"
+                    },
+                    "comments_enabled": {
+                        "type": "boolean",
+                        "description": "Enable comments on this paste",
+                        "example": true
+                    },
+                    "checksum_passphrase": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Optional passphrase to generate cryptographic signature. The API returns a checksum_pair [partial, full] where sha256(passphrase + partial) = full. Users can prove ownership by sharing this passphrase.",
+                        "example": "my-secret-phrase"
+                    },
+                    "expires_at": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true,
+                        "description": "Optional expiration timestamp in Unix epoch seconds",
+                        "example": 1716921600
+                    },
+                    "forked_from": {
+                        "type": "integer",
+                        "format": "int64",
+                        "nullable": true,
+                        "description": "ID of paste to fork from",
+                        "example": 1000
+                    }
+                }
+            },
+            "CreatePasteResponse": {
+                "type": "object",
+                "required": [
+                    "id"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "ID of the newly created paste",
+                        "example": 1234
+                    }
+                }
+            },
+            "Comment": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "paste_id",
+                    "content",
+                    "created_at",
+                    "page_index",
+                    "from_row",
+                    "from_column",
+                    "to_row",
+                    "to_column"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Unique identifier for the comment",
+                        "example": 42
+                    },
+                    "paste_id": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "ID of the paste this comment belongs to",
+                        "example": 1234
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The comment text",
+                        "example": "This looks great!"
+                    },
+                    "author": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Optional author name",
+                        "example": "jane_smith"
+                    },
+                    "created_at": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Creation timestamp in Unix epoch seconds",
+                        "example": 1716835200
+                    },
+                    "page_index": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Page/file index for multi-file pastes (0-based)",
+                        "example": 0
+                    },
+                    "from_row": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Starting row of the text selection (0-based)",
+                        "example": 5
+                    },
+                    "from_column": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Starting column of the text selection (0-based)",
+                        "example": 10
+                    },
+                    "to_row": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Ending row of the text selection (0-based)",
+                        "example": 5
+                    },
+                    "to_column": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Ending column of the text selection (0-based)",
+                        "example": 25
+                    }
+                }
+            },
+            "CreateCommentRequest": {
+                "type": "object",
+                "required": [
+                    "paste_id",
+                    "content",
+                    "page_index",
+                    "from_row",
+                    "from_column",
+                    "to_row",
+                    "to_column"
+                ],
+                "properties": {
+                    "paste_id": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "ID of the paste to comment on",
+                        "example": 1234
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The comment text",
+                        "example": "This looks great!"
+                    },
+                    "author": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Optional author name",
+                        "example": "jane_smith"
+                    },
+                    "page_index": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Page/file index for multi-file pastes (0-based)",
+                        "example": 0
+                    },
+                    "from_row": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Starting row of the text selection (0-based)",
+                        "example": 5
+                    },
+                    "from_column": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Starting column of the text selection (0-based)",
+                        "example": 10
+                    },
+                    "to_row": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Ending row of the text selection (0-based)",
+                        "example": 5
+                    },
+                    "to_column": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Ending column of the text selection (0-based)",
+                        "example": 25
+                    }
+                }
+            },
+            "CreateCommentResponse": {
+                "type": "object",
+                "required": [
+                    "id"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "ID of the newly created comment",
+                        "example": 42
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "System",
+            "description": "System endpoints for health checks and API documentation"
+        },
+        {
+            "name": "Pastes",
+            "description": "Operations for creating and fetching code pastes"
+        },
+        {
+            "name": "Comments",
+            "description": "Operations for creating and fetching comments on pastes"
+        }
+    ]
+}

@@ -6,3 +6,30 @@ migration:
 
 running:
 `cargo run --bin hastebin`
+
+========================================
+AI Integration (Conversational Use)
+========================================
+
+Purpose: Enable AI assistants to interact with pastes users share in conversations
+
+Endpoints:
+- GET /openapi.json - OpenAPI 3.1.0 spec
+- GET /.well-known/ai-plugin.json - AI plugin manifest
+- GET /ai-instructions - Consolidated guide (serves docs/ai/README.md)
+
+Documentation:
+- docs/ai/README.md - Complete integration guide
+- docs/ai/example.py - Python reference implementation
+
+Key Concept: URLs use hex IDs (e.g., /abc123), API uses decimal
+  User shares:  https://hastebin.ianhon.com/abc123
+  AI extracts:  "abc123"
+  AI converts:  int("abc123", 16) = 11259375
+  AI fetches:   GET /paste/fetch/11259375
+
+Common AI workflows:
+1. User shares URL → AI fetches & analyzes code
+2. User asks for improvements → AI creates fork
+3. User requests review → AI adds comments
+4. User needs code → AI creates paste & shares URL
