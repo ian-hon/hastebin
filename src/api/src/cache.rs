@@ -68,3 +68,120 @@ impl PasteCache {
         self.cache.lock().unwrap().map.len()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_paste(id: i64) -> Paste {
+        Paste {
+            id,
+            content: format!("content for paste {id}"),
+            title: None,
+            author: None,
+            checksum_passphrase: None,
+            views: 0,
+            comments_enabled: true,
+            created_at: 0,
+            expires_at: None,
+            forked_from: None,
+        }
+    }
+
+    #[test]
+    fn insert_and_get_returns_paste() {
+        let cache = PasteCache::new(10);
+        let paste = make_paste(1);
+        cache.insert(1, paste.clone());
+        let result = cache.get(1).expect("expected paste in cache");
+        assert_eq!(result.id, 1);
+        assert_eq!(result.content, paste.content);
+    }
+
+    #[test]
+    fn get_missing_key_returns_none() {
+        let cache = PasteCache::new(10);
+        assert!(cache.get(999).is_none());
+    }
+
+    #[test]
+    fn remove_deletes_entry() {
+        let cache = PasteCache::new(10);
+        cache.insert(1, make_paste(1));
+        cache.remove(1);
+        assert!(cache.get(1).is_none());
+        assert_eq!(cache.len(), 0);
+    }
+
+    #[test]
+    fn remove_nonexistent_is_a_no_op() {
+        let cache = PasteCache::new(10);
+        cache.insert(1, make_paste(1));
+        cache.remove(99); // should not panic or remove entry 1
+        assert!(cache.get(1).is_some());
+    }
+
+    #[test]
+    fn len_tracks_insertions_and_removals() {
+        let cache = PasteCache::new(10);
+        assert_eq!(cache.len(), 0);
+        cache.insert(1, make_paste(1));
+        assert_eq!(cache.len(), 1);
+        cache.insert(2, make_paste(2));
+        assert_eq!(cache.len(), 2);
+        cache.remove(1);
+        assert_eq!(cache.len(), 1);
+    }
+
+    #[test]
+    fn lru_evicts_oldest_entry_when_full() {
+        let cache = PasteCache::new(3);
+        cache.insert(1, make_paste(1));
+        cache.insert(2, make_paste(2));
+        cache.insert(3, make_paste(3));
+        // inserting a 4th entry should evict entry 1 (LRU)
+        cache.insert(4, make_paste(4));
+        assert!(cache.get(1).is_none(), "entry 1 should have been evicted");
+        assert!(cache.get(2).is_some());
+        assert!(cache.get(3).is_some());
+        assert!(cache.get(4).is_some());
+        assert_eq!(cache.len(), 3);
+    }
+
+    #[test]
+    fn reinserting_existing_key_moves_it_to_most_recent() {
+        let cache = PasteCache::new(3);
+        cache.insert(1, make_paste(1));
+        cache.insert(2, make_paste(2));
+        cache.insert(3, make_paste(3));
+
+        // re-insert 1 — it should now be the most recently used
+        cache.insert(1, make_paste(1));
+
+        // inserting a 4th entry should evict entry 2 (now the LRU), not 1
+        cache.insert(4, make_paste(4));
+        assert!(
+            cache.get(1).is_some(),
+            "entry 1 should not have been evicted"
+        );
+        assert!(cache.get(2).is_none(), "entry 2 should have been evicted");
+        assert_eq!(cache.len(), 3);
+    }
+
+    #[test]
+    fn cache_with_max_size_zero_stays_empty() {
+        let cache = PasteCache::new(0);
+        cache.insert(1, make_paste(1));
+        assert_eq!(cache.len(), 0);
+        assert!(cache.get(1).is_none());
+    }
+
+    #[test]
+    fn clone_shares_underlying_state() {
+        let cache = PasteCache::new(10);
+        let clone = cache.clone();
+        cache.insert(1, make_paste(1));
+        // clone should see the same entry because they share the Arc<Mutex<_>>
+        assert!(clone.get(1).is_some());
+    }
+}

@@ -58,9 +58,11 @@ name = "api"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "dotenvy",
  "engine",
  "serde",
  "sqlx",
+ "tokio",
 ]
 
 [[package]]
@@ -485,11 +487,13 @@ name = "engine"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "dotenvy",
  "rand 0.10.1",
  "serde",
  "serde_json",
  "sha2",
  "sqlx",
+ "tokio",
  "zstd",
 ]
 

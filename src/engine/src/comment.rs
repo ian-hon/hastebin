@@ -35,7 +35,7 @@ impl Comment {
 
     // TODO: encrypt this as well
     pub async fn fetch(id: i64, pool: &Pool<Postgres>) -> Option<Comment> {
-        let r = sqlx::query_as::<_, Comment>("SELECT * FROM comment WHERE id = $2")
+        let r = sqlx::query_as::<_, Comment>("SELECT * FROM comment WHERE id = $1")
             .bind(id)
             .fetch_optional(pool)
             .await;
