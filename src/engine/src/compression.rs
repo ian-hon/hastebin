@@ -1,5 +1,5 @@
 pub fn compress_fast(data: &str) -> Result<Vec<u8>, std::io::Error> {
-    zstd::encode_all(data.as_bytes(), 3)
+    zstd::encode_all(data.as_bytes(), 11)
 }
 
 pub fn compress_best(data: &str) -> Result<Vec<u8>, std::io::Error> {
