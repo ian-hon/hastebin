@@ -1,4 +1,5 @@
 use engine::models::Paste;
+use sqlx::{Pool, Postgres};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
@@ -15,6 +16,8 @@ pub struct PasteCache {
 struct CacheInner {
     map: HashMap<i64, Paste>,
     order: VecDeque<i64>,
+    // note: views can be larger than map. all that matters is we keep track of the views
+    views: HashMap<i64, i64>, // views will be synchronised with db every 5 mins
 }
 
 impl PasteCache {
@@ -23,6 +26,7 @@ impl PasteCache {
             cache: Arc::new(Mutex::new(CacheInner {
                 map: HashMap::new(),
                 order: VecDeque::new(),
+                views: HashMap::new(),
             })),
             max_size,
         }
@@ -32,16 +36,36 @@ impl PasteCache {
     // no update, only CRD
 
     pub fn get(&self, id: i64) -> Option<Paste> {
-        self.cache.lock().unwrap().map.get(&id).cloned()
+        let mut lock = self.cache.lock().unwrap();
+        let updated_views = {
+            let paste = lock.map.get_mut(&id)?;
+            paste.views += 1;
+            paste.views
+        };
+
+        // update order
+        lock.order.retain(|&existing_id| existing_id != id);
+        lock.order.push_back(id);
+
+        // update the views hashmap
+        lock.views.insert(id, updated_views);
+
+        lock.map.get(&id).cloned()
     }
 
-    pub fn insert(&self, id: i64, paste: Paste) {
+    pub fn insert(&self, id: i64, mut paste: Paste) {
         let mut cache = self.cache.lock().unwrap();
 
         // if it already exists, remove it
         // trust me itll get added back later
         if cache.map.contains_key(&id) {
             cache.order.retain(|&existing_id| existing_id != id);
+        }
+
+        // if the paste gets removed then re-inserted, we use the views hashmap
+        // its the only thing thatll persist longer
+        if let Some(&view_count) = cache.views.get(&id) {
+            paste.views = view_count;
         }
 
         cache.map.insert(id, paste);
@@ -66,6 +90,19 @@ impl PasteCache {
 
     pub fn len(&self) -> usize {
         self.cache.lock().unwrap().map.len()
+    }
+
+    pub async fn synchronise(&self, pool: &Pool<Postgres>) {
+        let views = {
+            let mut lock = self.cache.lock().unwrap();
+            std::mem::take(&mut lock.views)
+        };
+
+        // then set the views
+        for (id, view_count) in views {
+            println!("setting {id} to {view_count}");
+            Paste::set_views(id, view_count, pool).await;
+        }
     }
 }
 
@@ -183,5 +220,166 @@ mod tests {
         cache.insert(1, make_paste(1));
         // clone should see the same entry because they share the Arc<Mutex<_>>
         assert!(clone.get(1).is_some());
+    }
+
+    #[test]
+    fn get_increments_view_count() {
+        let cache = PasteCache::new(10);
+        cache.insert(1, make_paste(1));
+
+        let result1 = cache.get(1).unwrap();
+        assert_eq!(result1.views, 1);
+
+        let result2 = cache.get(1).unwrap();
+        assert_eq!(result2.views, 2);
+
+        let result3 = cache.get(1).unwrap();
+        assert_eq!(result3.views, 3);
+    }
+
+    #[test]
+    fn get_preserves_initial_view_count() {
+        let cache = PasteCache::new(10);
+        let mut paste = make_paste(1);
+        paste.views = 100;
+        cache.insert(1, paste);
+
+        let result = cache.get(1).unwrap();
+        assert_eq!(result.views, 101, "should increment from initial views");
+    }
+
+    #[test]
+    fn synchronise_drains_views_map() {
+        let cache = PasteCache::new(10);
+        cache.insert(1, make_paste(1));
+        cache.insert(2, make_paste(2));
+
+        cache.get(1);
+        cache.get(1);
+        cache.get(2);
+
+        let views = {
+            let lock = cache.cache.lock().unwrap();
+            lock.views.clone()
+        };
+
+        assert_eq!(views.get(&1), Some(&2));
+        assert_eq!(views.get(&2), Some(&1));
+    }
+
+    #[test]
+    fn get_updates_lru_order_preventing_eviction() {
+        let cache = PasteCache::new(3);
+        cache.insert(1, make_paste(1));
+        cache.insert(2, make_paste(2));
+        cache.insert(3, make_paste(3));
+
+        // access entry 1 to make it most recent
+        cache.get(1);
+
+        // inserting entry 4 should evict entry 2 (LRU), not entry 1
+        cache.insert(4, make_paste(4));
+
+        assert!(cache.get(1).is_some(), "entry 1 should still exist");
+        assert!(cache.get(2).is_none(), "entry 2 should have been evicted");
+        assert!(cache.get(3).is_some(), "entry 3 should still exist");
+        assert!(cache.get(4).is_some(), "entry 4 should exist");
+    }
+
+    #[test]
+    fn view_tracking_persists_after_cache_eviction() {
+        let cache = PasteCache::new(2);
+        cache.insert(1, make_paste(1));
+        cache.insert(2, make_paste(2));
+
+        // increment views for entry 1
+        cache.get(1);
+        cache.get(1);
+
+        // evict entry 1 by inserting 3 and 4
+        cache.insert(3, make_paste(3));
+        cache.insert(4, make_paste(4));
+
+        assert!(
+            cache.get(1).is_none(),
+            "entry 1 should be evicted from cache"
+        );
+
+        // views map should still track entry 1's views even though it's not in the cache
+        let views = {
+            let lock = cache.cache.lock().unwrap();
+            lock.views.clone()
+        };
+
+        assert_eq!(
+            views.get(&1),
+            Some(&2),
+            "view count should persist for evicted entries"
+        );
+    }
+
+    #[test]
+    fn multiple_pastes_track_views_independently() {
+        let cache = PasteCache::new(10);
+        cache.insert(1, make_paste(1));
+        cache.insert(2, make_paste(2));
+        cache.insert(3, make_paste(3));
+
+        cache.get(1);
+        cache.get(2);
+        cache.get(2);
+        cache.get(3);
+        cache.get(3);
+        cache.get(3);
+
+        let p1 = cache.get(1).unwrap();
+        let p2 = cache.get(2).unwrap();
+        let p3 = cache.get(3).unwrap();
+
+        assert_eq!(p1.views, 2);
+        assert_eq!(p2.views, 3);
+        assert_eq!(p3.views, 4);
+    }
+
+    #[test]
+    fn insert_does_not_reset_view_count() {
+        let cache = PasteCache::new(10);
+        cache.insert(1, make_paste(1));
+
+        cache.get(1);
+        cache.get(1);
+
+        // re-insert the same paste
+        cache.insert(1, make_paste(1));
+
+        // view count should be preserved in the views map
+        let result = cache.get(1).unwrap();
+        assert_eq!(
+            result.views, 3,
+            "views should continue from where they left off"
+        );
+    }
+
+    #[test]
+    fn remove_keeps_view_tracking() {
+        let cache = PasteCache::new(10);
+        cache.insert(1, make_paste(1));
+
+        cache.get(1);
+        cache.get(1);
+
+        cache.remove(1);
+
+        // views should still be tracked even after removal
+        let views = {
+            let lock = cache.cache.lock().unwrap();
+            lock.views.clone()
+        };
+
+        assert_eq!(
+            views.get(&1),
+            Some(&2),
+            "view tracking should persist after removal"
+        );
     }
 }

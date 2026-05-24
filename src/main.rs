@@ -16,9 +16,10 @@ async fn main() -> anyhow::Result<()> {
 
     let db_pool = engine::db::create_pool(&config.database_url).await?;
     sqlx::migrate!("./migrations").run(&db_pool).await?;
-    tasks::spawn_all_tasks(db_pool.clone(), config.clone());
+    let cache = api::PasteCache::new(config.cache_size);
 
-    let app_state = api::AppState::new(db_pool, config.clone());
+    tasks::spawn_all_tasks(db_pool.clone(), cache.clone(), config.clone());
+    let app_state = api::AppState::new(db_pool, cache, config.clone());
 
     let app = Router::new()
         // https://www.reddit.com/r/node/comments/bol0fq/comment/enhhc3k

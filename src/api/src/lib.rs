@@ -22,6 +22,8 @@ pub struct Config {
 
     // number of pastes to cache in memory
     pub cache_size: usize,
+    // how often to sync cache and db, in seconds
+    pub cache_sync_interval: u64,
 }
 
 #[derive(Clone)]
@@ -34,8 +36,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(db: Pool<Postgres>, config: Config) -> Self {
-        let cache = PasteCache::new(config.cache_size);
+    pub fn new(db: Pool<Postgres>, cache: PasteCache, config: Config) -> Self {
         Self { db, config, cache }
     }
 }

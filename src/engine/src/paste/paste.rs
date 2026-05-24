@@ -48,12 +48,24 @@ impl Paste {
 
     pub async fn fetch(id: i64, pool: &Pool<Postgres>) -> Option<Paste> {
         // for user use
+        Self::increment_views(id, pool).await;
+
+        Self::fetch_internal(id, pool).await
+    }
+
+    pub async fn increment_views(id: i64, pool: &Pool<Postgres>) {
         let _ = sqlx::query("UPDATE paste SET views = views + 1 WHERE id = $1")
             .bind(id)
             .execute(pool)
             .await;
+    }
 
-        Self::fetch_internal(id, pool).await
+    pub async fn set_views(id: i64, views: i64, pool: &Pool<Postgres>) {
+        let _ = sqlx::query("UPDATE paste SET views = $1 WHERE id = $2")
+            .bind(views)
+            .bind(id)
+            .execute(pool)
+            .await;
     }
 
     pub async fn fetch_internal(id: i64, pool: &Pool<Postgres>) -> Option<Paste> {

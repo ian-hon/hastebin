@@ -23,5 +23,8 @@ pub fn from_env() -> anyhow::Result<Config> {
         cache_size: env::var("CACHE_SIZE")
             .unwrap_or_else(|_| "100".to_string())
             .parse()?,
+        cache_sync_interval: env::var("CACHE_SYNC_INTERVAL")
+            .unwrap_or_else(|_| "600".to_string())
+            .parse()?,
     })
 }
